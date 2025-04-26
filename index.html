@@ -2,22 +2,31 @@
 <html lang="de">
 <head>
   <meta charset="UTF-8">
-  <title>Spion Spiel - Word Links</title>
+  <title>Spion Spiel - Word Links mit Kategorien</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <style>
     body { font-family: sans-serif; text-align: center; padding: 2em; background: #f9f9f9; }
-    button, input { margin: 1em; padding: 0.7em; font-size: 1em; }
+    button, input, select { margin: 1em; padding: 0.7em; font-size: 1em; }
     .link-list { margin-top: 2em; }
     .player-link { display: block; margin: 0.5em 0; }
   </style>
 </head>
 <body>
 
-<h1>🕵️ Spion Spiel - Word Links</h1>
+<h1>🕵️ Spion Spiel - Word Links mit Kategorien</h1>
 
 <div id="setup">
   <input type="number" id="playerCount" placeholder="Anzahl Spieler" min="3">
   <input type="number" id="spyCount" placeholder="Anzahl Spione" min="1">
+  <br>
+  <select id="categorySelect">
+    <option value="Zufall">🎲 Zufällig</option>
+    <option value="Geografie">🏙️ Geografie</option>
+    <option value="Geschichte">📦 Geschichte</option>
+    <option value="Anime">👒 Anime</option>
+    <option value="Filme und Serien">🎬 Filme und Serien</option>
+    <option value="Bekannte Persönlichkeiten">🌟 Persönlichkeiten</option>
+  </select>
   <br>
   <button onclick="startGame()">Spiel erstellen</button>
 </div>
@@ -29,19 +38,29 @@
 </div>
 
 <script>
-const words = ["Sahara", "Everest", "Atlantis", "Amazonas", "Wolkenkratzer", "Grand Canyon"];
-let gameData = {};
+const wordCategories = {
+  "Geografie": ["Äquator", "Kontinent", "Insel", "Gebirge", "Tal", "Wüste", "See", "Fluss", "Wald", "Ozean", "Gebirge", "Grand Canyon", "Everest"],
+  "Geschichte": ["Römisches Reich", "Mittelalter", "Renaissance", "Französische Revolution", "Weltkrieg", "Pyramiden", "Kaiser", "Adel", "Pharao", "Troja", "Alexander der Große"],
+  "Anime": ["Naruto", "Sasuke", "Konoha", "Akatsuki", "Sharingan", "Luffy", "Zorro", "Nami", "Dragon Ball", "Goku", "Vegeta", "Titan", "Death Note", "Light"],
+  "Filme und Serien": ["Breaking Bad", "Walter White", "Game of Thrones", "Jon Snow", "Stranger Things", "Eleven", "The Office", "Friends", "Harry Potter", "Hogwarts", "Lord of the Rings", "Frodo"],
+  "Bekannte Persönlichkeiten": ["Albert Einstein", "Isaac Newton", "Leonardo da Vinci", "Nikola Tesla", "Elon Musk", "Steve Jobs", "Barack Obama", "Angela Merkel", "Nelson Mandela", "Martin Luther King"]
+};
 
 function startGame() {
   const playerCount = parseInt(document.getElementById('playerCount').value);
   const spyCount = parseInt(document.getElementById('spyCount').value);
+  const categoryChoice = document.getElementById('categorySelect').value;
 
   if (isNaN(playerCount) || isNaN(spyCount) || playerCount < 3 || spyCount < 1 || spyCount >= playerCount) {
     alert("Bitte gültige Spieler- und Spionanzahl eingeben.");
     return;
   }
 
+  const categories = Object.keys(wordCategories);
+  const selectedCategory = (categoryChoice === "Zufall") ? categories[Math.floor(Math.random() * categories.length)] : categoryChoice;
+  const words = wordCategories[selectedCategory];
   const secretWord = words[Math.floor(Math.random() * words.length)];
+
   const players = Array.from({length: playerCount}, (_, i) => i + 1);
   const spies = [];
 
@@ -50,14 +69,13 @@ function startGame() {
     spies.push(players.splice(idx, 1)[0]);
   }
 
-  // Generate links
   const linksDiv = document.getElementById('links');
   linksDiv.innerHTML = '<h2>Teile diese Links mit den Spielern:</h2>';
   for (let i = 1; i <= playerCount; i++) {
     const playerKey = 'player' + i;
     const isSpy = spies.includes(i);
-    const data = isSpy ? 'spy' : secretWord;
-    const encoded = btoa(data);
+    const payload = JSON.stringify({ category: selectedCategory, role: isSpy ? "spy" : secretWord });
+    const encoded = btoa(payload);
     const link = window.location.href.split('?')[0] + '?p=' + playerKey + '&d=' + encoded;
     const a = document.createElement('a');
     a.href = link;
@@ -80,11 +98,11 @@ const player = urlParams.get('p');
 const data = urlParams.get('d');
 
 if (player && data) {
-  const decoded = atob(data);
-  if (decoded === 'spy') {
-    showPlayerView("🕵️ Du bist ein Spion! Versuche unauffällig zu bleiben!");
+  const decoded = JSON.parse(atob(data));
+  if (decoded.role === "spy") {
+    showPlayerView(`Kategorie: ${decoded.category} \n🕵️ Du bist ein Spion!`);
   } else {
-    showPlayerView(`🔑 Dein Wort ist: ${decoded}`);
+    showPlayerView(`Kategorie: ${decoded.category} \n🔑 Dein Wort ist: ${decoded.role}`);
   }
 }
 </script>
