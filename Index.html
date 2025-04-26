@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <title>Spion Spiel - Word Links</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    body { font-family: sans-serif; text-align: center; padding: 2em; background: #f9f9f9; }
+    button, input { margin: 1em; padding: 0.7em; font-size: 1em; }
+    .link-list { margin-top: 2em; }
+    .player-link { display: block; margin: 0.5em 0; }
+  </style>
+</head>
+<body>
+
+<h1>🕵️ Spion Spiel - Word Links</h1>
+
+<div id="setup">
+  <input type="number" id="playerCount" placeholder="Anzahl Spieler" min="3">
+  <input type="number" id="spyCount" placeholder="Anzahl Spione" min="1">
+  <br>
+  <button onclick="startGame()">Spiel erstellen</button>
+</div>
+
+<div id="links" class="link-list"></div>
+
+<div id="playerView" style="display:none;">
+  <h2 id="playerInfo"></h2>
+</div>
+
+<script>
+const words = ["Sahara", "Everest", "Atlantis", "Amazonas", "Wolkenkratzer", "Grand Canyon"];
+let gameData = {};
+
+function startGame() {
+  const playerCount = parseInt(document.getElementById('playerCount').value);
+  const spyCount = parseInt(document.getElementById('spyCount').value);
+
+  if (isNaN(playerCount) || isNaN(spyCount) || playerCount < 3 || spyCount < 1 || spyCount >= playerCount) {
+    alert("Bitte gültige Spieler- und Spionanzahl eingeben.");
+    return;
+  }
+
+  const secretWord = words[Math.floor(Math.random() * words.length)];
+  const players = Array.from({length: playerCount}, (_, i) => i + 1);
+  const spies = [];
+
+  while (spies.length < spyCount) {
+    const idx = Math.floor(Math.random() * players.length);
+    spies.push(players.splice(idx, 1)[0]);
+  }
+
+  // Generate links
+  const linksDiv = document.getElementById('links');
+  linksDiv.innerHTML = '<h2>Teile diese Links mit den Spielern:</h2>';
+  for (let i = 1; i <= playerCount; i++) {
+    const playerKey = 'player' + i;
+    const isSpy = spies.includes(i);
+    const data = isSpy ? 'spy' : secretWord;
+    const encoded = btoa(data);
+    const link = window.location.href.split('?')[0] + '?p=' + playerKey + '&d=' + encoded;
+    const a = document.createElement('a');
+    a.href = link;
+    a.innerText = `Link für Spieler ${i}`;
+    a.className = 'player-link';
+    linksDiv.appendChild(a);
+  }
+
+  document.getElementById('setup').style.display = 'none';
+}
+
+function showPlayerView(text) {
+  document.getElementById('playerInfo').innerText = text;
+  document.getElementById('playerView').style.display = 'block';
+}
+
+// Check if player is accessing their link
+const urlParams = new URLSearchParams(window.location.search);
+const player = urlParams.get('p');
+const data = urlParams.get('d');
+
+if (player && data) {
+  const decoded = atob(data);
+  if (decoded === 'spy') {
+    showPlayerView("🕵️ Du bist ein Spion! Versuche unauffällig zu bleiben!");
+  } else {
+    showPlayerView(`🔑 Dein Wort ist: ${decoded}`);
+  }
+}
+</script>
+
+</body>
+</html>
