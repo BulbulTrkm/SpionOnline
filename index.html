@@ -2,25 +2,33 @@
 <html lang="de">
 <head>
   <meta charset="UTF-8">
-  <title>Spion Spiel - Word Links mit Kategorien</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Spion Spiel Lobby</title>
+  <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
   <style>
-    body { font-family: sans-serif; text-align: center; padding: 2em; background: #f9f9f9; }
-    button, input, select { margin: 1em; padding: 0.7em; font-size: 1em; }
-    .link-list { margin-top: 2em; }
-    .player-link { display: block; margin: 0.5em 0; }
+    body { font-family: Arial, sans-serif; text-align: center; padding: 20px; background: #f2f2f2; }
+    input, button, select { margin: 10px; padding: 10px; font-size: 1em; }
+    #lobby, #game { display: none; }
   </style>
 </head>
 <body>
 
-<h1>🕵️ Spion Spiel - Word Links mit Kategorien</h1>
+<h1>🕵️ Spion Spiel Online</h1>
 
-<div id="setup">
-  <input type="number" id="playerCount" placeholder="Anzahl Spieler" min="3">
-  <input type="number" id="spyCount" placeholder="Anzahl Spione" min="1">
+<div id="start">
+  <input type="text" id="playerName" placeholder="Dein Name">
+  <br>
+  <button onclick="createLobby()">Lobby erstellen</button>
+  <br>
+  <input type="text" id="lobbyCodeInput" placeholder="Lobby-Code eingeben">
+  <button onclick="joinLobby()">Lobby beitreten</button>
+</div>
+
+<div id="lobby">
+  <h2>Lobby Code: <span id="lobbyCode"></span></h2>
+  <div id="players"></div>
   <br>
   <select id="categorySelect">
-    <option value="Zufall">🎲 Zufällig</option>
     <option value="Geografie">🏙️ Geografie</option>
     <option value="Geschichte">📦 Geschichte</option>
     <option value="Anime">👒 Anime</option>
@@ -28,83 +36,70 @@
     <option value="Bekannte Persönlichkeiten">🌟 Persönlichkeiten</option>
   </select>
   <br>
-  <button onclick="startGame()">Spiel erstellen</button>
+  <input type="number" id="spyCount" placeholder="Anzahl Spione" min="1">
+  <br>
+  <button onclick="startGame()">Spiel starten</button>
 </div>
 
-<div id="links" class="link-list"></div>
-
-<div id="playerView" style="display:none;">
-  <h2 id="playerInfo"></h2>
+<div id="game">
+  <h2 id="gameInfo"></h2>
 </div>
 
 <script>
-const wordCategories = {
-  "Geografie": ["Äquator", "Kontinent", "Insel", "Gebirge", "Tal", "Wüste", "See", "Fluss", "Wald", "Ozean", "Gebirge", "Grand Canyon", "Everest"],
-  "Geschichte": ["Römisches Reich", "Mittelalter", "Renaissance", "Französische Revolution", "Weltkrieg", "Pyramiden", "Kaiser", "Adel", "Pharao", "Troja", "Alexander der Große"],
-  "Anime": ["Naruto", "Sasuke", "Konoha", "Akatsuki", "Sharingan", "Luffy", "Zorro", "Nami", "Dragon Ball", "Goku", "Vegeta", "Titan", "Death Note", "Light"],
-  "Filme und Serien": ["Breaking Bad", "Walter White", "Game of Thrones", "Jon Snow", "Stranger Things", "Eleven", "The Office", "Friends", "Harry Potter", "Hogwarts", "Lord of the Rings", "Frodo"],
-  "Bekannte Persönlichkeiten": ["Albert Einstein", "Isaac Newton", "Leonardo da Vinci", "Nikola Tesla", "Elon Musk", "Steve Jobs", "Barack Obama", "Angela Merkel", "Nelson Mandela", "Martin Luther King"]
-};
+const socket = io('https://dein-backend-url.onrender.com'); // <<< HIER deinen echten Backend-Link einfügen
+
+let currentLobby = '';
+
+function createLobby() {
+  const name = document.getElementById('playerName').value;
+  if (!name) return alert('Bitte Namen eingeben!');
+  socket.emit('createLobby', { playerName: name }, ({ lobbyCode }) => {
+    currentLobby = lobbyCode;
+    document.getElementById('start').style.display = 'none';
+    document.getElementById('lobby').style.display = 'block';
+    document.getElementById('lobbyCode').innerText = lobbyCode;
+  });
+}
+
+function joinLobby() {
+  const name = document.getElementById('playerName').value;
+  const lobbyCode = document.getElementById('lobbyCodeInput').value.toUpperCase();
+  if (!name || !lobbyCode) return alert('Bitte Name und Lobby-Code eingeben!');
+  socket.emit('joinLobby', { lobbyCode, playerName: name }, (response) => {
+    if (response.error) return alert(response.error);
+    currentLobby = lobbyCode;
+    document.getElementById('start').style.display = 'none';
+    document.getElementById('lobby').style.display = 'block';
+    document.getElementById('lobbyCode').innerText = lobbyCode;
+  });
+}
 
 function startGame() {
-  const playerCount = parseInt(document.getElementById('playerCount').value);
   const spyCount = parseInt(document.getElementById('spyCount').value);
-  const categoryChoice = document.getElementById('categorySelect').value;
-
-  if (isNaN(playerCount) || isNaN(spyCount) || playerCount < 3 || spyCount < 1 || spyCount >= playerCount) {
-    alert("Bitte gültige Spieler- und Spionanzahl eingeben.");
-    return;
-  }
-
-  const categories = Object.keys(wordCategories);
-  const selectedCategory = (categoryChoice === "Zufall") ? categories[Math.floor(Math.random() * categories.length)] : categoryChoice;
-  const words = wordCategories[selectedCategory];
-  const secretWord = words[Math.floor(Math.random() * words.length)];
-
-  const players = Array.from({length: playerCount}, (_, i) => i + 1);
-  const spies = [];
-
-  while (spies.length < spyCount) {
-    const idx = Math.floor(Math.random() * players.length);
-    spies.push(players.splice(idx, 1)[0]);
-  }
-
-  const linksDiv = document.getElementById('links');
-  linksDiv.innerHTML = '<h2>Teile diese Links mit den Spielern:</h2>';
-  for (let i = 1; i <= playerCount; i++) {
-    const playerKey = 'player' + i;
-    const isSpy = spies.includes(i);
-    const payload = JSON.stringify({ category: selectedCategory, role: isSpy ? "spy" : secretWord });
-    const encoded = btoa(payload);
-    const link = window.location.href.split('?')[0] + '?p=' + playerKey + '&d=' + encoded;
-    const a = document.createElement('a');
-    a.href = link;
-    a.innerText = `Link für Spieler ${i}`;
-    a.className = 'player-link';
-    linksDiv.appendChild(a);
-  }
-
-  document.getElementById('setup').style.display = 'none';
+  const category = document.getElementById('categorySelect').value;
+  if (!spyCount || spyCount < 1) return alert('Anzahl der Spione angeben!');
+  socket.emit('startGame', { lobbyCode: currentLobby, spyCount, category });
 }
 
-function showPlayerView(text) {
-  document.getElementById('playerInfo').innerText = text;
-  document.getElementById('playerView').style.display = 'block';
-}
+socket.on('updatePlayers', (players) => {
+  const playersDiv = document.getElementById('players');
+  playersDiv.innerHTML = '<h3>Spieler:</h3>';
+  players.forEach(p => {
+    const div = document.createElement('div');
+    div.innerText = p.name;
+    playersDiv.appendChild(div);
+  });
+});
 
-// Check if player is accessing their link
-const urlParams = new URLSearchParams(window.location.search);
-const player = urlParams.get('p');
-const data = urlParams.get('d');
-
-if (player && data) {
-  const decoded = JSON.parse(atob(data));
-  if (decoded.role === "spy") {
-    showPlayerView(`Kategorie: ${decoded.category} \n🕵️ Du bist ein Spion!`);
+socket.on('gameData', ({ category, role }) => {
+  document.getElementById('lobby').style.display = 'none';
+  document.getElementById('game').style.display = 'block';
+  if (role === 'Spion') {
+    document.getElementById('gameInfo').innerText = `Kategorie: ${category}\n🕵️ Du bist ein Spion!`;
   } else {
-    showPlayerView(`Kategorie: ${decoded.category} \n🔑 Dein Wort ist: ${decoded.role}`);
+    document.getElementById('gameInfo').innerText = `Kategorie: ${category}\n🔑 Dein Wort: ${role}`;
   }
-}
+});
 </script>
 
 </body>
