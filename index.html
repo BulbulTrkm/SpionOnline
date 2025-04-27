@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Spion Spiel Lobby</title>
+  <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+  <style>
+    body { font-family: Arial, sans-serif; text-align: center; padding: 20px; background: #f2f2f2; }
+    input, button, select { margin: 10px; padding: 10px; font-size: 1em; }
+    #lobby, #game { display: none; }
+  </style>
+
+  <style>
+    .dark-mode {
+      background-color: #121212;
+      color: #e0e0e0;
+    }
+    .footer-controls {
+      position: fixed;
+      bottom: 10px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      gap: 10px;
+      z-index: 1000;
+    }
+    .footer-controls button {
+      padding: 10px 20px;
+      font-size: 1em;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      background: #007bff;
+      color: white;
+    }
+  </style>
+
+</head>
+<body>
+
+<h1>🕵️ Spion Spiel Online</h1>
+
+<div id="start">
+  <input type="text" id="playerName" placeholder="Dein Name">
+  <br>
+  <button onclick="createLobby()">Lobby erstellen</button>
+  <br>
+  <input type="text" id="lobbyCodeInput" placeholder="Lobby-Code eingeben">
+  <button onclick="joinLobby()">Lobby beitreten</button>
+</div>
+
+<div id="lobby">
+  <h2>Lobby Code: <span id="lobbyCode"></span></h2>
+  <div id="players"></div>
+  <br>
+  <select id="categorySelect">
+    <option value="Zufall" selected>🎲 Zufall</option>
+    <option value="Geografie">🏙️ Geografie</option>
+    <option value="Geschichte">📦 Geschichte</option>
+    <option value="Anime">👒 Anime</option>
+    <option value="Filme und Serien">🎬 Filme und Serien</option>
+    <option value="Bekannte Persönlichkeiten">🌟 Persönlichkeiten</option>
+  </select>
+  <br>
+  <input type="number" id="spyCount" placeholder="Anzahl Spione" min="1">
+  <br>
+  <button id="startButton" style="display:none;" onclick="startGame()">Spiel starten</button>
+</div>
+
+<div id="game">
+  <h2 id="gameInfo"></h2>
+  <button id="endButton" style="display:none;" onclick="endGame()">Spiel beenden</button>
+  <button id="restartButton" style="display:none;" onclick="restartGame()">Neue Runde starten</button>
+</div>
+
+<script>
+const socket = io('https://spiononline.onrender.com/');
+let currentLobby = '';
+let isOwner = false;
+
+function createLobby() {
+  const name = document.getElementById('playerName').value;
+  if (!name) return alert('Bitte Namen eingeben!');
+  socket.emit('createLobby', { playerName: name }, ({ lobbyCode }) => {
+    currentLobby = lobbyCode;
+    isOwner = true;
+    document.getElementById('start').style.display = 'none';
+    document.getElementById('lobby').style.display = 'block';
+    document.getElementById('lobbyCode').innerText = lobbyCode;
+    // Zeige Auswahlfelder für den Host
+    document.getElementById('categorySelect').style.display = 'inline-block';
+    document.getElementById('spyCount').style.display = 'inline-block';
+    document.getElementById('startButton').style.display = 'inline-block';
+  });
+}
+
+function joinLobby() {
+  const name = document.getElementById('playerName').value;
+  const lobbyCode = document.getElementById('lobbyCodeInput').value.toUpperCase();
+  if (!name || !lobbyCode) return alert('Bitte Name und Lobby-Code eingeben!');
+  socket.emit('joinLobby', { lobbyCode, playerName: name }, (response) => {
+    if (response.error) return alert(response.error);
+    currentLobby = lobbyCode;
+    isOwner = false;
+    document.getElementById('start').style.display = 'none';
+    document.getElementById('lobby').style.display = 'block';
+    document.getElementById('lobbyCode').innerText = lobbyCode;
+    document.getElementById('startButton').style.display = 'none';
+    // Verstecke Auswahlfelder für Nicht-Hosts
+    document.getElementById('categorySelect').style.display = 'none';
+    document.getElementById('spyCount').style.display = 'none';
+  });
+}
+
+function startGame() {
+  const spyCount = parseInt(document.getElementById('spyCount').value);
+  const category = document.getElementById('categorySelect').value;
+  if (!spyCount || spyCount < 1) return alert('Anzahl der Spione angeben!');
+  socket.emit('startGame', { lobbyCode: currentLobby, spyCount, category });
+  document.getElementById('categorySelect').style.display = 'none';
+  document.getElementById('spyCount').style.display = 'none';
+  document.getElementById('startButton').style.display = 'none';
+}
+
+function endGame() {
+  socket.emit('endGame', { lobbyCode: currentLobby });
+}
+
+function restartGame() {
+  const spyCount = parseInt(document.getElementById('spyCount').value);
+  const category = document.getElementById('categorySelect').value;
+  if (!spyCount || spyCount < 1) return alert('Anzahl der Spione angeben!');
+  socket.emit('restartGame', { lobbyCode: currentLobby, spyCount, category });
+  document.getElementById('gameInfo').innerText = '';
+  document.getElementById('restartButton').style.display = 'none';
+}
+
+socket.on('updatePlayers', (players) => {
+  document.getElementById('lobby').style.display = 'block';
+  document.getElementById('players').innerHTML = '<h3>Spieler:</h3>' +
+    players.map(p => '<div>' + p.name + '</div>').join('');
+});
+
+socket.on('gameData', ({ category, role }) => {
+  document.getElementById('lobby').style.display = 'none';
+  document.getElementById('game').style.display = 'block';
+  document.getElementById('endButton').style.display = isOwner ? 'inline-block' : 'none';
+  document.getElementById('restartButton').style.display = 'none';
+  document.getElementById('gameInfo').innerText =
+    role === 'Spion'
+      ? `Kategorie: ${category}\n🕵️ Du bist ein Spion!`
+      : `Kategorie: ${category}\n🔑 Dein Wort: ${role}`;
+});
+
+socket.on('gameEnd', ({ spyNames }) => {
+  document.getElementById('endButton').style.display = 'none';
+  document.getElementById('restartButton').style.display = isOwner ? 'inline-block' : 'none';
+  document.getElementById('gameInfo').innerText = 'Spiel beendet!\nSpione waren: ' + spyNames.join(', ');
+});
+</script>
+
+<div class="footer-controls">
+  <button onclick="toggleFullscreen()">Fullscreen</button>
+  <button onclick="toggleDarkMode()">Dark Mode</button>
+</div>
+<script>
+  function toggleFullscreen() {
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen().catch(err => console.error(err));
+    } else {
+      document.exitFullscreen();
+    }
+  }
+  function toggleDarkMode() {
+    document.body.classList.toggle('dark-mode');
+  }
+</script>
+
+</body>
+</html>
